@@ -26,6 +26,7 @@ import org.apache.calcite.sql.type.SqlOperandMetadata;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
 import org.apache.calcite.sql.validate.SqlValidator;
 
@@ -33,6 +34,7 @@ import com.google.common.collect.ImmutableList;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -107,12 +109,70 @@ public class SqlWindowTableFunction extends SqlFunction
   private static RelDataType inferRowType(SqlOperatorBinding opBinding) {
     final RelDataType inputRowType = opBinding.getOperandType(0);
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+    final RelDataType windowBoundType =
+        inferWindowBoundType(opBinding, inputRowType, typeFactory);
     return typeFactory.builder()
         .kind(inputRowType.getStructKind())
         .addAll(inputRowType.getFieldList())
-        .add("window_start", SqlTypeName.TIMESTAMP, 3)
-        .add("window_end", SqlTypeName.TIMESTAMP, 3)
+        .add("window_start", windowBoundType)
+        .add("window_end", windowBoundType)
         .build();
+  }
+
+  private static RelDataType inferWindowBoundType(SqlOperatorBinding opBinding,
+      RelDataType inputRowType,
+      RelDataTypeFactory typeFactory) {
+    final int defaultPrecision = 3;
+    final @Nullable String timeColumnName = inferTimeColumnName(opBinding);
+    if (timeColumnName != null) {
+      final RelDataTypeField timeColumn =
+          inputRowType.getField(timeColumnName, false, false);
+      if (timeColumn != null && SqlTypeUtil.isTimestamp(timeColumn.getType())) {
+        final RelDataType timeType = timeColumn.getType();
+        final int precision = Math.max(defaultPrecision, timeType.getPrecision());
+        return typeFactory.createSqlType(timeType.getSqlTypeName(), precision);
+      }
+    }
+    for (RelDataTypeField field : inputRowType.getFieldList()) {
+      if (SqlTypeUtil.isTimestamp(field.getType())) {
+        final RelDataType timeType = field.getType();
+        final int precision = Math.max(defaultPrecision, timeType.getPrecision());
+        return typeFactory.createSqlType(timeType.getSqlTypeName(), precision);
+      }
+    }
+    return typeFactory.createSqlType(SqlTypeName.TIMESTAMP, defaultPrecision);
+  }
+
+  private static @Nullable String inferTimeColumnName(SqlOperatorBinding opBinding) {
+    if (!(opBinding instanceof SqlCallBinding)) {
+      return null;
+    }
+    final SqlCallBinding callBinding = (SqlCallBinding) opBinding;
+    for (int i = 0; i < callBinding.getOperandCount(); i++) {
+      final SqlNode operand = callBinding.operand(i);
+      if (operand.getKind() == SqlKind.DESCRIPTOR && operand instanceof SqlCall) {
+        final SqlNode descriptorArg = ((SqlCall) operand).operand(0);
+        if (descriptorArg instanceof SqlIdentifier
+            && ((SqlIdentifier) descriptorArg).isSimple()) {
+          return ((SqlIdentifier) descriptorArg).getSimple();
+        }
+      }
+      if (SqlUtil.isCallTo(operand, SqlStdOperatorTable.ROW) && operand instanceof SqlCall) {
+        final SqlNode descriptorArg = ((SqlCall) operand).operand(0);
+        if (descriptorArg instanceof SqlIdentifier
+            && ((SqlIdentifier) descriptorArg).isSimple()) {
+          return ((SqlIdentifier) descriptorArg).getSimple();
+        }
+      }
+    }
+    // Fallback for bindings that surface descriptors as ROW/COLUMN_LIST metadata.
+    final List<String> columns = new ArrayList<>();
+    try {
+      opBinding.getColumnListParamInfo(1, PARAM_TIMECOL, columns);
+    } catch (UnsupportedOperationException e) {
+      return null;
+    }
+    return columns.isEmpty() ? null : columns.get(0);
   }
 
   /** Partial implementation of operand type checker. */
