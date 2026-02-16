@@ -1,0 +1,50 @@
+{
+  "name": "calcite-sql-language-client",
+  "displayName": "Calcite SQL Language Client",
+  "description": "VS Code client extension for the Calcite SQL Language Server",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Calcite SQL Language Server",
+      "properties": {
+        "calciteSqlLsp.server.command": {
+          "type": "string",
+          "default": "/Users/henneberger/calcite/calcite-lsp/build/install/calcite-lsp/bin/calcite-lsp",
+          "description": "Server executable command (use the installDist script)."
+        },
+        "calciteSqlLsp.server.args": {
+          "type": "array",
+          "default": [],
+          "description": "Arguments passed to the server command."
+        },
+        "calciteSqlLsp.server.initializationOptions": {
+          "type": "object",
+          "default": {},
+          "description": "Initialization options passed to the language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.2"
+  }
+}
