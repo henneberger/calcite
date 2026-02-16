@@ -11608,6 +11608,53 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "tumble(table orders, descriptor(rowtime), interval '2' hour))").ok();
     sql("select rowtime, productid, orderid, 'window_start', 'window_end' from table(\n"
         + "tumble(table orders, descriptor(rowtime), interval '2' hour, interval '1' hour))").ok();
+    // Test case for [CALCITE-7410] TIMESTAMP type for TUMBLE and HOP
+    // is hardwired to TIMESTAMP(3).
+    final SqlValidatorFixture highPrecisionFixture =
+        fixture()
+            .withFactory(tf ->
+                tf.withTypeSystem(typeSystem ->
+                    new DelegatingTypeSystem(typeSystem) {
+                      @Override public int getMaxPrecision(SqlTypeName typeName) {
+                        switch (typeName) {
+                        case TIMESTAMP:
+                        case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                        case TIMESTAMP_TZ:
+                          return 6;
+                        default:
+                          return super.getMaxPrecision(typeName);
+                        }
+                      }
+
+                      @Override public int getDefaultPrecision(SqlTypeName typeName) {
+                        switch (typeName) {
+                        case TIMESTAMP:
+                        case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                        case TIMESTAMP_TZ:
+                          return 6;
+                        default:
+                          return super.getDefaultPrecision(typeName);
+                        }
+                      }
+                    }));
+    highPrecisionFixture.withSql("with o as (\n"
+        + "  select cast(TIMESTAMP '2020-01-01 00:00:00.123456' as TIMESTAMP(6)) as rowtime,\n"
+        + "      2 as productid, 3 as orderid)\n"
+        + "select rowtime from o")
+        .columnType("TIMESTAMP(6) NOT NULL");
+    highPrecisionFixture.withSql("with o as (\n"
+        + "  select cast(TIMESTAMP '2020-01-01 00:00:00.123456' as TIMESTAMP(6)) as rowtime,\n"
+        + "      2 as productid, 3 as orderid)\n"
+        + "select \"window_start\" from table(\n"
+        + "tumble(table o, descriptor(rowtime), interval '2' hour))")
+        .columnType("TIMESTAMP(6) NOT NULL");
+    highPrecisionFixture.withSql("with o as (\n"
+        + "  select cast(TIMESTAMP '2020-01-01 00:00:00.123' as TIMESTAMP(3)) as t3,\n"
+        + "      cast(TIMESTAMP '2020-01-01 00:00:00.123456' as TIMESTAMP(6)) as t6,\n"
+        + "      2 as productid, 3 as orderid)\n"
+        + "select \"window_start\" from table(\n"
+        + "tumble(table o, descriptor(t6), interval '2' hour))")
+        .columnType("TIMESTAMP(6) NOT NULL");
     // test named params.
     sql("select rowtime, productid, orderid, 'window_start', 'window_end'\n"
         + "from table(\n"
@@ -11695,6 +11742,46 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql("select * from table(\n"
         + "hop(table orders, descriptor(rowtime), interval '2' hour, interval '1' hour, "
         + "interval '20' minute))").ok();
+    // Test case for [CALCITE-7410] TIMESTAMP type for TUMBLE and HOP
+    // is hardwired to TIMESTAMP(3).
+    final SqlValidatorFixture highPrecisionFixture =
+        fixture()
+            .withFactory(tf ->
+                tf.withTypeSystem(typeSystem ->
+                    new DelegatingTypeSystem(typeSystem) {
+                      @Override public int getMaxPrecision(SqlTypeName typeName) {
+                        switch (typeName) {
+                        case TIMESTAMP:
+                        case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                        case TIMESTAMP_TZ:
+                          return 6;
+                        default:
+                          return super.getMaxPrecision(typeName);
+                        }
+                      }
+
+                      @Override public int getDefaultPrecision(SqlTypeName typeName) {
+                        switch (typeName) {
+                        case TIMESTAMP:
+                        case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                        case TIMESTAMP_TZ:
+                          return 6;
+                        default:
+                          return super.getDefaultPrecision(typeName);
+                        }
+                      }
+                    }));
+    highPrecisionFixture.withSql("with o as (\n"
+        + "  select cast(TIMESTAMP '2020-01-01 00:00:00.123456' as TIMESTAMP(6)) as rowtime,\n"
+        + "      2 as productid, 3 as orderid)\n"
+        + "select rowtime from o")
+        .columnType("TIMESTAMP(6) NOT NULL");
+    highPrecisionFixture.withSql("with o as (\n"
+        + "  select cast(TIMESTAMP '2020-01-01 00:00:00.123456' as TIMESTAMP(6)) as rowtime,\n"
+        + "      2 as productid, 3 as orderid)\n"
+        + "select \"window_start\" from table(\n"
+        + "hop(table o, descriptor(rowtime), interval '2' hour, interval '1' hour))")
+        .columnType("TIMESTAMP(6) NOT NULL");
     // test named params.
     sql("select * from table(\n"
         + "hop(\n"
