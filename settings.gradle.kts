@@ -62,6 +62,7 @@ rootProject.name = "calcite"
 
 include(
     "bom",
+    "calcite-lsp",
     "release",
     "arrow",
     "babel",
